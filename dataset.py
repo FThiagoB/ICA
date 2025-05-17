@@ -115,6 +115,10 @@ class Dataset:
             stratify = _stratify
         )
 
+        # Reinicia os indices dos subconjuntos
+        train = train.reset_index( drop=True )
+        test = test.reset_index( drop=True )
+
         # Retorna as instâncias para Datasets dos conjuntos separados
         return (
             self.__class__( train, label_column = self.label_column, column_names = self.column_names, _label_categories = self._label_categories ),
@@ -374,7 +378,7 @@ class Dataset:
         cols = [i for i in range(n) if i != label_column] + [label_column]
 
         # Percorre o gerador do dataset remodelado
-        for row in self.data.iloc[:, cols].itertuples(index = True):
+        for row in self.data.iloc[:, cols].itertuples():
             yield row
 
 # Alguns testes com a classe
