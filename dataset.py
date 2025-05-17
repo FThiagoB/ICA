@@ -2,7 +2,7 @@
 Classe Dataset para normalizar a manipulação de DataFrames com coluna para rótulos.
 
 Este módulo implementa uma classe "Dataset", que funciona como um wrapper para pandas DataFrames, simplificando
-tarefas comuns em tarefas de machine learning, tais como separação entre atributos/rótulo, normalização de dados,
+tarefas comuns de machine learning, tais como separação entre atributos/rótulo, normalização de dados,
 remoção de atributos e divisão do conjunto de dados.
 
 Author: Thiago Barbosa
@@ -11,7 +11,6 @@ Created: 2025
 Example:
     >>> from dataset import Dataset
     >>> import pandas as pd
-    >>> ds = Dataset(df, label_column=-1)
     >>> iris_dataset = Dataset.from_file( filepath = "iris.data", label_column = -1 ).ensure_numeric_labels().normalize()
     >>> print( iris_dataset )
     [1] Dataset(instâncias=150, features=4, classes=3)
@@ -32,13 +31,14 @@ import matplotlib.pyplot as plt
 
 # Usado para o método split: é possível fazer um split manualmente, mas train_test_split é mais eficiente e há estratificação já implementada.
 from sklearn.model_selection import train_test_split
+from scipy.stats import pearsonr
 
 # Realiza alguns imports para a especificação de tipos
 from typing import Self, Optional, Union, List
 
 
 class Dataset:
-    """Um wrapper para pandas DataFrames que facilita o uso de base de dados para machine learning.
+    """Um wrapper para DataFrames que facilita o uso de base de dados para machine learning.
 
     Attributes:
         data (pd.DataFrame): O pandas DataFrame com os dados.
@@ -136,7 +136,7 @@ class Dataset:
 
         # Realiza uma cópia do DataFrame (garante imutabilidade)
         new_data = self.data.copy( deep = True )
-        m, n = new_data.shape
+        m, n_total = new_data.shape
 
         # Índices a serem removidos
         cols_to_drop = set()
@@ -146,10 +146,10 @@ class Dataset:
             # O atributo foi especificado como índice
             if isinstance(feature, int):
                 # Trata índices negativos
-                idx = feature if feature >= 0 else (feature + n)
+                idx = feature if feature >= 0 else (feature + n_total)
                 
                 # Verifica se o índice está fora do intervalo permitido
-                if (idx < 0) or (idx >= n):
+                if (idx < 0) or (idx >= n_total):
                     raise ValueError(f"Índice {feature} fora do intervalo permitido.")
                 
                 cols_to_drop.add( idx )
@@ -173,19 +173,19 @@ class Dataset:
                 raise ValueError("Os elementos especificador devem ser str ou int")
         
         # Verifica se a coluna de label foi especificada
-        if ( (self.label_column >= 0) and (self.label_column in cols_to_drop) ) or ( (self.label_column < 0) and ((self.label_column + n) in cols_to_drop) ):
+        if ( (self.label_column >= 0) and (self.label_column in cols_to_drop) ) or ( (self.label_column < 0) and ((self.label_column + n_total) in cols_to_drop) ):
             raise ValueError("Não é permitido remover a coluna de label")
         
         # Calcula as colunas restantes
-        remaining_cols = [i for i in range(n) if i not in cols_to_drop]
+        remaining_cols = [i for i in range(n_total) if i not in cols_to_drop]
 
         # Atualiza a posição do label = label atual menos a quantidade de atributos anteriores que foram removidos
-        resolved_label = self.label_column if self.label_column >= 0 else self.label_column + n
-        new_label_column = self.label_column - sum( 1 for col in cols_to_drop if col < resolved_label )
+        resolved_label = self.label_column if self.label_column >= 0 else self.label_column + n_total
+        new_label_column = resolved_label - sum( 1 for col in cols_to_drop if col < resolved_label )
 
         # Garante que new_label_column seja negativo se o original era
         if self.label_column < 0:
-            new_label_column -= (self.data.shape[1] - len(cols_to_drop))
+            new_label_column -= (n_total - len(cols_to_drop))
 
         # Atualiza a lista de nomes, se estiver definida
         remaining_label_column = None
@@ -206,12 +206,12 @@ class Dataset:
         new_data = self.data.copy( deep = True ).astype(float)
 
         # Dimensões do Dataframe
-        m, n = new_data.shape
+        m, n_total = new_data.shape
 
         # Percorre os índices dos atributos
-        for idx in range( n ):
+        for idx in range( n_total ):
             # Se for a coluna de rótulo, pula para a próxima
-            if (self.label_column >= 0 and idx == self.label_column) or (self.label_column < 0 and idx == (self.label_column + n)):
+            if (self.label_column >= 0 and idx == self.label_column) or (self.label_column < 0 and idx == (self.label_column + n_total)):
                 continue
 
             # Obtém o subconjunto do atributo de índice idx
@@ -231,7 +231,7 @@ class Dataset:
         return self.__class__( new_data, label_column = self.label_column, column_names = self.column_names, _label_categories = self._label_categories )
 
     def ensure_numeric_labels( self ) -> Self:
-        """ Converte os valores dos rótulos para inteiros. """
+        """ Converte os valores dos rótulos para valores numéricos. """
 
         # Cópia do conjunto de dados
         new_data = self.data.copy( deep = True )
@@ -246,7 +246,7 @@ class Dataset:
         # Usa factorize para converter os rótulos em inteiros
         encoded_labels, uniques = self.data.iloc[:, self.label_column].factorize()
 
-        # Atribui a coluna convertida para 
+        # Substitui a coluna de rótulos pelos valores numéricos
         new_data.iloc[:, self.label_column] = encoded_labels
 
         # Dicionário com o mapeamento inteiro-rótulo
@@ -254,6 +254,46 @@ class Dataset:
 
         # Retorna uma nova instância normalizada
         return self.__class__( new_data, label_column = self.label_column, column_names = self.column_names, _label_categories = self._label_categories )
+    
+    def determination_matrix( self ) -> pd.DataFrame:
+        """ Retorna a matriz de determinação entre as colunas do dataset """
+        m, n_total = self.data.shape
+
+        # Organiza os indices do DataFrame de forma que a coluna de rótulo fique no final
+        label_column = self.label_column if self.label_column >= 0 else self.label_column + n_total
+        cols = [i for i in range(n_total) if i != label_column] + [label_column]
+
+        dataset = self.data.iloc[:, cols]
+
+        # Organiza a lista de nomes das colunas para que fique no final
+        column_names = None
+
+        if self.column_names:
+            column_names = np.array(self.column_names)[cols].tolist()
+
+        # Inicializa uma matriz de zeros com a dimensão necessária (#colunas x #colunas)
+        determination = pd.DataFrame( 
+            np.zeros( (n_total, n_total) ),
+            index = column_names,
+            columns = column_names
+        )
+
+        # Percorre primeiro as linhas
+        for i_features in range( n_total ):
+            i_column = dataset.iloc[:, i_features]
+
+            # Percorre as colunas
+            for j_features in range( n_total ):
+                j_column = dataset.iloc[:, j_features]
+
+                # Calcula o coeficiente de correlação de Pearson
+                r_pearson = pearsonr( i_column, j_column ).statistic
+
+                # Guarda o valor do quadrado do coef. de Pearson na matriz
+                determination.iloc[i_features, j_features] = r_pearson ** 2
+        
+        # Retorna a matriz de determinação calculada
+        return determination
     
     @classmethod
     def from_file( cls, filepath : str, *, comment_marker : str = "#", missing_marker : str = "?", label_column : int = -1, column_names : Optional[list[str]] = None, delimiter : str = "," ) -> None:
@@ -342,5 +382,11 @@ if __name__ == "__main__":
     path_dataset = r"datasets\column_3C.dat"
     column_names = ["pelvic_incidence", "pelvic_tilt", "lumbar_lordosis_angle", "sacral_slope", "pelvic_radius", "degree_spondylolisthesis", "class"]
 
-    vertebral_column_dataset = Dataset.from_file( path_dataset, delimiter=" ", label_column=-1, column_names=column_names ).ensure_numeric_labels()
+    vertebral_column_dataset = Dataset.from_file( 
+        filepath = path_dataset, 
+        delimiter = " ", 
+        label_column = -1, 
+        column_names = column_names 
+    ).ensure_numeric_labels()
+    
     print( vertebral_column_dataset )
