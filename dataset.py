@@ -34,7 +34,7 @@ from sklearn.model_selection import train_test_split
 from scipy.stats import pearsonr
 
 # Realiza alguns imports para a especificação de tipos
-from typing import Self, Optional, Union, List
+from typing import Self, Optional, Union, List, Iterable
 
 
 class Dataset:
@@ -62,6 +62,8 @@ class Dataset:
         self.label_column = label_column            # Armazena o índice para a coluna de rótulo
         self.column_names = column_names            # Armazena a lista com os rótulos das colunas do DataFrame
         self._label_categories = _label_categories  # Correspondência inteiro: texto da coluna de rótulo
+
+        self._centroids = None                      # Armazenará os centróides das classes
 
         # Se for especificado, define o nome das colunas
         if self.column_names is not None:
@@ -299,6 +301,28 @@ class Dataset:
         # Retorna a matriz de determinação calculada
         return determination
     
+    def move_label_to_end(self) -> Self:
+        """Move a coluna de label para a última posição, ajustando column_names se existir."""
+        m, n_total = self.data.shape
+
+        # Obtém a posição absoluta da coluna de rótulo
+        label_column = self.label_column if self.label_column >= 0 else self.label_column + n_total
+
+        # Reorganiza as colunas, deixando o índice do label na última coluna
+        cols = [i for i in range(n_total) if i != label_column] + [label_column]
+
+        # Obtém a tabela reorganizada
+        new_data = self.data.iloc[:, cols]
+
+        # Reorganiza o nome das colunas
+        new_column_names = None
+
+        if self.column_names:
+            new_column_names = [self.column_names[i] for i in range(n_total) if i != label_column] + [ self.column_names[label_column] ]
+
+        # Retorna uma nova instância normalizada
+        return self.__class__( new_data, label_column = -1, column_names = new_column_names, _label_categories = self._label_categories )
+        
     @classmethod
     def from_file( cls, filepath : str, *, comment_marker : str = "#", missing_marker : str = "?", label_column : int = -1, column_names : Optional[list[str]] = None, delimiter : str = "," ) -> None:
         """
@@ -354,6 +378,21 @@ class Dataset:
         k = len( self.y.unique() )
 
         return (m, n, k)
+    
+    @property
+    def centroids( self ) -> Iterable:
+        """ Calcula os centroides do conjunto de dados
+        
+        Returns:
+            Iterable: Um iterável que permite acessar os centroides na forma 
+            (index, *features, classe), onde classe é o rótulo do centroide.
+        """
+
+        if self._centroids is None:
+            # Agrupa por classe e calcula a média (centroide) para cada uma (índice numérico é resetado)
+            self._centroids = self.data.groupby( self.y ).mean().reset_index(drop=True)
+
+        return self._centroids.itertuples()
     
     def __len__( self ):
         """ Retorna o número de instâncias do conjunto de dados. """
