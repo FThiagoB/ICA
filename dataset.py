@@ -409,7 +409,7 @@ class Dataset:
         idx = np.argmax(output_vector)
         pred_vector[ idx ] = +1
         
-        return self.decode_prediction( pred_vector )
+        return self.decode_vector( pred_vector )
 
     @classmethod
     def from_file( cls, filepath : str, *, comment_marker : str = "#", missing_marker : str = "?", label_column : int = -1, column_names : Optional[list[str]] = None, delimiter : str = "," ) -> None:
@@ -468,7 +468,7 @@ class Dataset:
         m, n_total = self.data.shape
         
         n = n_total - 1 
-        k = self.class_count()
+        k = self.class_count
 
         return (m, n, k)
     
