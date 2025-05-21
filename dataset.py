@@ -44,10 +44,10 @@ class Dataset:
         data (pd.DataFrame): O pandas DataFrame com os dados.
         label_column (int): Posição da coluna de rótulo (aceita indexação negativa).
         column_names (Optional[List[str]]): Nome das colunas do DataFrame.
-        _label_categories (dict): Mapeia os rótulos codificados para os valores originais.
+        _label_index_to_name (dict): Mapeia os rótulos codificados para os valores originais.
     """
 
-    def __init__( self, data: pd.DataFrame, *, label_column : int = -1, column_names : Optional[list[str]] = None, _label_categories : dict = None ) -> None:
+    def __init__( self, data: pd.DataFrame, *, label_column : int = -1, column_names : Optional[list[str]] = None, _label_index_to_name : dict = None, _label_encodings = None, _label_decodings = None ) -> None:
         """
         Inicializa a classe Dataset.
 
@@ -55,15 +55,20 @@ class Dataset:
             data: DataFrame com os dados do conjunto de dados.
             label_column: Posição da coluna de rótulo (por padrão é -1, última coluna).
             column_names: Lista opcional com os nomes das colunas.
-            _label_categories : Metadado passado entre instâncias, contém o mapeamento inteiro/texto dos rótulos.
+            _label_index_to_name : Metadado passado entre instâncias, contém o mapeamento inteiro/texto dos rótulos.
+            _label_encodings: Metadado passado entre instâncias, garantindo que uma possível codificação seja passado adiante.
+            _label_decodings: Metadado passado entre instâncias, garantindo que uma possível codificação seja passado adiante.
         """
 
-        self.data = data                            # Guarda o DataFrame do conjunto de dados
-        self.label_column = label_column            # Armazena o índice para a coluna de rótulo
-        self.column_names = column_names            # Armazena a lista com os rótulos das colunas do DataFrame
-        self._label_categories = _label_categories  # Correspondência inteiro: texto da coluna de rótulo
+        self.data = data                                    # Guarda o DataFrame do conjunto de dados
+        self.label_column = label_column                    # Armazena o índice para a coluna de rótulo
+        self.column_names = column_names                    # Armazena a lista com os rótulos das colunas do DataFrame
+        self._label_index_to_name = _label_index_to_name    # Dicionário com a correspondência do inteiro com o texto da coluna de rótulo
 
+        # Variáveis para uso interno da classe
         self._centroids = None                      # Armazenará os centróides das classes
+        self._label_encodings = _label_encodings    # Armazenará o dicionário para codificar classes em vetores
+        self._label_decodings = _label_decodings    # Armazenará o dicionário para decodificar vetores em classes
 
         # Se for especificado, define o nome das colunas
         if self.column_names is not None:
@@ -91,7 +96,7 @@ class Dataset:
         data = self.data.sample(frac=1, random_state=random_state).reset_index( drop=True )
 
         # Retorna uma nova instância da classe
-        return self.__class__( data, label_column = self.label_column, column_names = self.column_names, _label_categories = self._label_categories )
+        return self.__class__( data, label_column = self.label_column, column_names = self.column_names, _label_index_to_name = self._label_index_to_name )
     
     def split( self, train_size: int = 0.8, *, random_state: Optional[int] = None, stratify: bool = False ) -> tuple[Self, Self]:
         """
@@ -123,8 +128,8 @@ class Dataset:
 
         # Retorna as instâncias para Datasets dos conjuntos separados
         return (
-            self.__class__( train, label_column = self.label_column, column_names = self.column_names, _label_categories = self._label_categories ),
-            self.__class__( test, label_column = self.label_column, column_names = self.column_names, _label_categories = self._label_categories )
+            self.__class__( train, label_column = self.label_column, column_names = self.column_names, _label_index_to_name = self._label_index_to_name, _label_encodings = self._label_encodings, _label_decodings = self._label_decodings ),
+            self.__class__( test, label_column = self.label_column, column_names = self.column_names, _label_index_to_name = self._label_index_to_name, _label_encodings = self._label_encodings, _label_decodings = self._label_decodings )
         )
     
     def remove_features( self, features_to_remove: List[ Union[int, str] ] ) -> Self:
@@ -203,7 +208,7 @@ class Dataset:
         new_data = new_data.iloc[:, remaining_cols]
         
         # Retorna uma nova instância para Dataset com os atributos restantes
-        return self.__class__( new_data, label_column = new_label_column, column_names = remaining_label_column, _label_categories = self._label_categories )
+        return self.__class__( new_data, label_column = new_label_column, column_names = remaining_label_column, _label_index_to_name = self._label_index_to_name )
 
     def normalize( self ) -> Self:
         """ Retorna o conjunto de dados com atributos normalizados em [-1, +1] """
@@ -234,7 +239,7 @@ class Dataset:
             new_data.iloc[:, idx] = new_column
         
         # Retorna uma nova instância normalizada
-        return self.__class__( new_data, label_column = self.label_column, column_names = self.column_names, _label_categories = self._label_categories )
+        return self.__class__( new_data, label_column = self.label_column, column_names = self.column_names, _label_index_to_name = self._label_index_to_name )
 
     def ensure_numeric_labels( self ) -> Self:
         """ Converte os valores dos rótulos para valores numéricos. """
@@ -256,10 +261,10 @@ class Dataset:
         new_data.iloc[:, self.label_column] = encoded_labels
 
         # Dicionário com o mapeamento inteiro-rótulo
-        self._label_categories = dict( enumerate(uniques) )
+        self._label_index_to_name = dict( enumerate(uniques) )
 
         # Retorna uma nova instância normalizada
-        return self.__class__( new_data, label_column = self.label_column, column_names = self.column_names, _label_categories = self._label_categories )
+        return self.__class__( new_data, label_column = self.label_column, column_names = self.column_names, _label_index_to_name = self._label_index_to_name )
     
     def determination_matrix( self ) -> pd.DataFrame:
         """ Retorna a matriz de determinação entre as colunas do dataset """
@@ -321,8 +326,91 @@ class Dataset:
             new_column_names = [self.column_names[i] for i in range(n_total) if i != label_column] + [ self.column_names[label_column] ]
 
         # Retorna uma nova instância normalizada
-        return self.__class__( new_data, label_column = -1, column_names = new_column_names, _label_categories = self._label_categories )
+        return self.__class__( new_data, label_column = -1, column_names = new_column_names, _label_index_to_name = self._label_index_to_name )
+
+    def vectorize_labels( self ):
+        """
+            Codifica os rótulos do conjunto de dados em vetores.
+
+            Para cada classe presente no conjunto de dados, este método gera um vetor
+            de saída onde a classe correspondente é representada por +1 e todas as demais
+            por -1. Requer que os rótulos já estejam em formato numérico.
+        """
         
+        # Obtém os valores únicos para as classes
+        unique_classes = self.y.unique()
+        unique_classes = sorted(unique_classes)
+
+        # Codifica as classes na forma de vetores
+        encode_classes = np.eye( self.class_count ) 
+        encode_classes[ encode_classes == 0 ] = -1
+
+        # Preenche o dicionário para codificação (classe->vetor)
+        self._label_encodings = {
+            label : encode_classes[i]
+            for i, label in enumerate( unique_classes )
+        }
+
+        # Preenche o dicionário para decodificação (vetor->classe)
+        self._label_decodings = {
+            tuple( encode_classes[i] ) : label
+            for i, label in enumerate( unique_classes )
+        }
+
+    def encode_label( self, label: Union[int, float] ) -> Union[None, np.ndarray]:
+        """
+            Retorna o vetor correspondente a um rótulo.
+
+            Args:
+                label: Valor numérico que representa a classe que se quer obter a codificação.
+            
+            Returns:
+                Retorna o vetor que codifica o rótulo especificado. Retorna None caso não o dicionário
+                de codificação não tenha sido inicializado.
+        """
+
+        if self._label_encodings is None:
+            return None
+        
+        return self._label_encodings[ label ]
+    
+    def decode_vector(self, vector: Union[np.ndarray, list, tuple]) -> Union[None, int]:
+        """
+            Retorna a classe que correspondente ao vetor especificado.
+
+            Args:
+                vector: Array, lista ou tupla que especifica o vetor que se quer obter a classe.
+            
+            Returns:
+                Retorna o valor da classe que corresponde ao vator especificado ou retorna None caso não o dicionário
+                de decodificação não tenha sido inicializado.
+        """
+
+        if self._label_decodings is None:
+            return None
+        
+        return self._label_decodings[ tuple(vector) ]
+    
+    def decode_prediction(self, output_vector: Union[np.ndarray, list, tuple]) -> Union[None, int]:
+        """
+            Decodifica um vetor de saída da rede, assumindo codificação (+1, -1), e retorna o rótulo da classe correspondente.
+
+            Args:
+                output_vector: Vetor de saída da rede, contendo valores como +1 e -1 para cada classe.
+            
+            Returns:
+                Retorna a classe que corresponde ao vetor especificado ou retorna None caso não o dicionário
+                de decodificação não tenha sido inicializado.
+        """
+
+        k = self.class_count
+
+        pred_vector = [-1] * k
+        idx = np.argmax(output_vector)
+        pred_vector[ idx ] = +1
+        
+        return self.decode_prediction( pred_vector )
+
     @classmethod
     def from_file( cls, filepath : str, *, comment_marker : str = "#", missing_marker : str = "?", label_column : int = -1, column_names : Optional[list[str]] = None, delimiter : str = "," ) -> None:
         """
@@ -361,6 +449,11 @@ class Dataset:
         return self.data.iloc[:, self.label_column]
     
     @property
+    def class_count(self):
+        """ Retorna o número de classes do conjunto de dados"""
+        return len( self.y.unique() )
+
+    @property
     def shape( self ) -> tuple[int, int, int]:
         """
         Retorna as dimensões do Dataset
@@ -375,7 +468,7 @@ class Dataset:
         m, n_total = self.data.shape
         
         n = n_total - 1 
-        k = len( self.y.unique() )
+        k = self.class_count()
 
         return (m, n, k)
     
@@ -393,6 +486,37 @@ class Dataset:
             self._centroids = self.data.groupby( self.y ).mean().reset_index(drop=True)
 
         return self._centroids.itertuples()
+    
+    @property
+    def label_encodings( self ) -> Union[ None, dict ]:
+        """ 
+            Método getter para o dicionário de codificação das classes em vetores
+
+            Returns:
+                Retorna None caso o método vectorize_labels não tenha sido chamado. Caso
+                contrário, retorna o dicionário contendo a codificação usada.
+        """
+
+        if self._label_encodings is None:
+            return None
+        
+        return self._label_encodings.copy()
+    
+    @property
+    def label_decodings( self ) -> Union[ None, dict ]:
+        """ 
+            Método getter para o dicionário de decodificação das classes em vetores
+
+            Returns:
+                Retorna None caso o método vectorize_labels não tenha sido chamado. Caso
+                contrário, retorna o dicionário contendo a decodificação usada para converter
+                os vetores nas classes.
+        """
+
+        if self._label_decodings is None:
+            return None
+        
+        return self._label_decodings.copy()
     
     def __len__( self ):
         """ Retorna o número de instâncias do conjunto de dados. """
