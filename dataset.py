@@ -5,10 +5,10 @@ Este módulo implementa uma classe "Dataset", que funciona como um wrapper para 
 tarefas comuns de machine learning, tais como separação entre atributos/rótulo, normalização de dados,
 remoção de atributos e divisão do conjunto de dados.
 
-Author: Thiago Barbosa
-Created: 2025
+Autor: Thiago Barbosa
+Criado em: 2025
 
-Example:
+Exemplo de uso:
     >>> from dataset import Dataset
     >>> import pandas as pd
     >>> iris_dataset = Dataset.from_file( filepath = "iris.data", label_column = -1 ).ensure_numeric_labels().normalize()
@@ -17,7 +17,7 @@ Example:
     >>> for indice, *features, classe in iris_dataset:
     ...     pass
 
-Main Features:
+Principais recursos:
     - Manipulação da coluna de rótulo.
     - Normalização (Intervalo de [-1, +1]).
     - Separação da base de dados entre treinamento e teste.
