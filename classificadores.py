@@ -148,6 +148,7 @@ class PerceptronSimples:
                 # Calcula o vetor de erro
                 err = real_output - output
 
+                # Se algum elemento não for zero, houve erro.
                 if np.any(err != 0):
                     total_erros += 1
 
@@ -184,11 +185,14 @@ class PerceptronSimples:
         # Calcula a ativação dos neurônios
         activations = self.W @ X_bias
 
+        # Calcula a saída da rede considerando a função signal
+        output = np.where( activations >= 0, 1, -1 )
+
         # Inicializa o vetor de saída com -1
         predicted_output = np.full_like(activations, -1)
 
-        # Atribui +1 ao neurônio com maior ativação (resolve ativações múltiplas)
-        predicted_output[ np.argmax(activations) ] = +1
+        # Usa argmax para resolver ativações múltiplas
+        predicted_output[ np.argmax(output) ] = +1
 
         # Retorna a classe correspondente ao vetor predito pela rede
-        return self.train_dataset.decode_vector( predicted_output )
+        return self.train_dataset.decode_vector( predicted_output ) 
