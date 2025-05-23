@@ -189,7 +189,7 @@ class PerceptronSimples:
         output = np.where( activations >= 0, 1, -1 )
 
         # Inicializa o vetor de saída com -1
-        predicted_output = np.full_like(activations, -1)
+        predicted_output = np.full_like(output, -1)
 
         # Usa argmax para resolver ativações múltiplas
         predicted_output[ np.argmax(output) ] = +1

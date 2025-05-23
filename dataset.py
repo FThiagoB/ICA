@@ -450,9 +450,15 @@ class Dataset:
     
     @property
     def class_count(self):
-        """ Retorna o número de classes do conjunto de dados"""
+        """ Retorna o número de classes do conjunto de dados """
         return len( self.y.unique() )
 
+    @property
+    def features_count(self):
+        """ Retorna o número de features do conjunto de dados """
+        _, n = self.X.shape
+        return n
+    
     @property
     def shape( self ) -> tuple[int, int, int]:
         """
@@ -465,9 +471,8 @@ class Dataset:
             k = número de classes
         """
 
-        m, n_total = self.data.shape
-        
-        n = n_total - 1 
+        m = self.__len__()
+        n = self.features_count
         k = self.class_count
 
         return (m, n, k)
