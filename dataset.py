@@ -562,3 +562,23 @@ if __name__ == "__main__":
     ).ensure_numeric_labels()
     
     print( vertebral_column_dataset )
+
+# ======== Carrega os conjuntos de dados na memória
+
+dermatology_dataset = Dataset.from_file(
+    filepath = r"datasets\dermatology.data",
+    label_column = -1,
+    column_names = ["erythema", "scaling", "definite-borders", "itching", "koebner" "phenomenon", "polygonal papules", "follicular papules", "oral-mucosal involvement", "knee elbow involvement", "scalp involvement", "family history", "melanin incontinence", "eosinophils in the infiltrate", "pnl infiltrate", "fibrosis of the papillary dermis", "exocytosis", "acanthosis", "hyperkeratosis", "parakeratosis", "clubbing of the rete ridges", "elongation of the rete ridges", "thinning of the suprapapillary epidermis", "spongiform pustule", "munro microabcess", "focal hypergranulosis", "disappearance of the granular layer", "vacuolisation and damage of the basal layer", "spongiosis", "saw-tooth appearance of retes", "follicular horn plug", "perifollicular parakeratosis", "inflammatory monoluclear infiltrate", "band-like infiltrate", "age", "class"]
+).normalize()
+
+wine_dataset = Dataset.from_file( 
+    filepath = r"datasets\wine.data", 
+    label_column = 0, 
+    column_names = ["class", "Alcohol", "Malicacid", "Ash", "Alcalinity of ash", "Magnesium", "Total phenols", "Flavanoids", "Nonflavanoid phenols","Proanthocyanins", "Color intensity", "Hue", "0D280 0D315 of diluted wines", "Proline"]
+).normalize().move_label_to_end()
+
+iris_dataset = Dataset.from_file( 
+    filepath = r"datasets\iris.data", 
+    label_column = -1, 
+    column_names = ["sepal length", "sepal width", "petal length", "petal width", "class"]
+).ensure_numeric_labels().normalize()
