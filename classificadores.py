@@ -312,12 +312,93 @@ class MultiLayerPerceptron:
 
         # Sentido direto - cálculo da ativação e a saída de cada camada
         u = self.W @ x_bias         # Ativação de cada neurônio oculto
-        y = self.activation( u )    # Saída dos neurônios ocultos
+        y = self.phi( u )           # Saída dos neurônios ocultos
 
         z = np.r_[ y, -1 ]          # Prepara as entradas para os neurônios de saída
 
         a = self.M @ z              # Ativação dos neurônio de saída
         o = self.phi ( a )          # Saída da camada de saída
+
+        # Monta um vetor de predição baseado no argmax da saída da rede
+        predicted_output = -np.ones_like(o)
+        predicted_output[ np.argmax(o) ] = +1
+
+        # Retorna a classe correspondente ao vetor predito pela rede
+        return self.train_dataset.decode_vector( predicted_output ) 
+
+class ExtremeLearningMachine:
+    """ Classe que implementa a ELM para problemas de classificação. """
+
+    def __init__( self, train_dataset: Dataset, q: int = 3 ):
+        """
+            Inicializa a classe ExtremeLearningMachine.
+
+            Args:
+                train_dataset: Classe Dataset que contém os exemplos do conjunto de treinamento.
+                q: Número de neurônios da camada oculta.
+        """
+
+        self.train_dataset = train_dataset
+
+        self.q = q                                  # Número de neurônios ocultos
+        self.p = train_dataset.features_count + 1   # Número de entradas da rede
+        self.m = train_dataset.class_count          # Número de classes do dataset
+        self.N = len(train_dataset)                 # Número de instâncias do conjunto de treino
+
+        # Função de ativação
+        self.phi = lambda u: (1 - np.exp(-u)) / (1 + np.exp(-u))
+
+        # Incializa as matrizes de pesos
+        self.W = np.random.normal( size=(self.q, self.p) )     # Pesos da camada oculta (q x p)
+        self.M = np.random.normal( size=(self.m, self.q+1) )   # Pesos da camada de saída (m, q+1)
+
+    def train( self ):
+        """
+            Calcula os pesos da camada de saída usando mínimos quadrados.
+        """
+        
+        Z = np.zeros((self.q+1, self.N))    # Matriz de entradas para a camada de saída de cada amostra (q+1, N)
+        D = np.zeros((self.m, self.N))      # Matriz dos vetores de saída desejada para cada amostra (m, N)
+
+        # Preenche as matrizes com os dados de cada instância de treinamento
+        for index, *features, classe in self.train_dataset:
+            # Vetor que representa a classe 
+            real_output = self.train_dataset.encode_label( classe )
+
+            X = np.r_[features, -1]     # Vetor de entrada da camada oculta
+            u = self.W @ X              # Ativação da camada oculta
+            y = self.phi(u)             # Saída da camada oculta (1xq)
+
+            Z[:, index] = np.r_[y, -1]  # Adiciona a saída da camada oculta na coluna adequada da amostra atual
+            D[:, index] = real_output   # Adiciona o vetor de saída desejada na coluna adequada da amostra atual
+        
+        # Atualiza a matriz de pesos de saída 
+        inversa = np.linalg.inv( Z @ Z.T ) # (q+1, q+1)
+
+        self.M = (
+            D @ Z.T     # (m, N) x (N, q+1) = (m, q+1)
+            @ inversa   # (m, q+1) x (q+1, q+1) = (m, q+1)
+        )
+    
+    def predict( self, features : np.ndarray ) -> Union[float, int]:
+        """
+            Função usada para prever a classe, dada as features do ponto.
+
+            Args:
+                features: Array com as features do ponto a ser classificado.
+            
+            Returns:
+                Retorna o número que indica a classe estimada.
+        """
+        
+        # Monta o vetor de entrada
+        x_bias = np.r_[features, -1]
+
+        u = self.W @ x_bias # Ativação de cada neurônio oculto
+        y = self.phi( u )   # Saída dos neurônios ocultos
+
+        z = np.r_[ y, -1 ]  # Prepara as entradas para os neurônios de saída
+        o = self.M @ z      # Calcula a saída dos neurônios de saída
 
         # Monta um vetor de predição baseado no argmax da saída da rede
         predicted_output = -np.ones_like(o)
