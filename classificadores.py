@@ -134,10 +134,10 @@ class PerceptronSimples:
                 real_output = self.train_dataset.encode_label( y )
 
                 # Vetor de entrada, adiciona o "-1" do viés à lista de features do exemplo
-                X_bias = np.r_[features, -1]   
+                x_bias = np.r_[features, -1]   
 
                 # Calcula a ativação dos neurônios: ordem de saída = (q x 1)
-                activations = self.W @ X_bias
+                activations = self.W @ x_bias
 
                 # Calcula a saída da rede considerando a função signal
                 output = np.where( activations >= 0, 1, -1 )
@@ -150,7 +150,7 @@ class PerceptronSimples:
                     total_erros += 1
 
                     # Atualiza os pesos usando o produto externo
-                    self.W += eta * np.outer(err, X_bias)
+                    self.W += eta * np.outer(err, x_bias)
 
             # Se acertou todo o conjunto de treinamento, para o treinamento
             if total_erros == 0:
@@ -177,10 +177,10 @@ class PerceptronSimples:
         """
 
         # Vetor de entrada, adiciona o "-1" do viés à lista de features passada
-        X_bias = np.r_[features, -1]
+        x_bias = np.r_[features, -1]
 
         # Calcula a ativação dos neurônios
-        activations = self.W @ X_bias
+        activations = self.W @ x_bias
 
         # Calcula a saída da rede considerando a função signal
         output = np.where( activations >= 0, 1, -1 )
@@ -213,8 +213,8 @@ class MultiLayerPerceptron:
         self.p = self.train_dataset.features_count + 1      # Número de entradas da rede
 
         # Função de ativação usada
-        self.activation = lambda x: np.tanh(x)
-        self.ddx_activation = lambda x: 1 - self.activation(x) ** 2
+        self.phi = lambda x: np.tanh(x)
+        self.ddx_phi = lambda x: 1 - self.phi(x) ** 2
 
         # Inicializa o vetor de pesos dos neurônios ocultos
         self.W = np.random.normal( size = (self.q, self.p) )     # (q, p)
@@ -251,23 +251,23 @@ class MultiLayerPerceptron:
                 real_output = self.train_dataset.encode_label( classe )
 
                 # Monta o vetor de entrada
-                X_bias = np.r_[features, -1]
+                x_bias = np.r_[features, -1]
 
                 # Sentido direto - cálculo da ativação e a saída de cada camada
-                U = self.W @ X_bias         # Ativação de cada neurônio oculto
-                Y = self.activation( U )    # Saída dos neurônios ocultos
+                u = self.W @ x_bias         # Ativação de cada neurônio oculto
+                y = self.phi( u )    # Saída dos neurônios ocultos
 
-                Z = np.r_[ Y, -1 ]          # Prepara as entradas para os neurônios de saída
+                z = np.r_[ y, -1 ]          # Prepara as entradas para os neurônios de saída
 
-                A = self.M @ Z              # Ativação dos neurônio de saída
-                O = self.activation ( A )   # Saída da camada de saída
+                a = self.M @ z              # Ativação dos neurônio de saída
+                o = self.phi ( a )   # Saída da camada de saída
 
                 # Sentido inverso - atualização dos pesos das camadas
-                err = real_output - O 
+                err = real_output - o 
 
                 # atualiza os pesos da camada de saída
-                delta_output = err * self.ddx_activation( A )           # (m x 1)
-                delta_weights_out = eta * np.outer( delta_output, Z )   # (m x (q+1))
+                delta_output = err * self.ddx_phi( a )                  # (m x 1)
+                delta_weights_out = eta * np.outer( delta_output, z )   # (m x (q+1))
                 self.M = self.M + delta_weights_out
 
                 # calcula os erros retropagados para a camada oculta oculto
@@ -275,12 +275,12 @@ class MultiLayerPerceptron:
                 backpropagated_error = output_weights_no_bias_T @ delta_output  # (q x 1)
 
                 # atualiza os pesos da camada oculta
-                delta_hidden = backpropagated_error * self.ddx_activation(U)    # (q x 1)
-                delta_weights_hidden = eta * np.outer( delta_hidden, X_bias )   # (q x p)
+                delta_hidden = backpropagated_error * self.ddx_phi(u)           # (q x 1)
+                delta_weights_hidden = eta * np.outer( delta_hidden, x_bias )   # (q x p)
                 self.W = self.W + delta_weights_hidden
 
                 # Verifica se a previsão seria acertada ou não
-                if np.argmax(O) != np.argmax(real_output):
+                if np.argmax(o) != np.argmax(real_output):
                     total_erros += 1
 
             # Se acertou todo o conjunto de treinamento, para o treinamento
@@ -308,20 +308,20 @@ class MultiLayerPerceptron:
         """
 
         # Monta o vetor de entrada
-        X_bias = np.r_[features, -1]
+        x_bias = np.r_[features, -1]
 
         # Sentido direto - cálculo da ativação e a saída de cada camada
-        U = self.W @ X_bias         # Ativação de cada neurônio oculto
-        Y = self.activation( U )    # Saída dos neurônios ocultos
+        u = self.W @ x_bias         # Ativação de cada neurônio oculto
+        y = self.activation( u )    # Saída dos neurônios ocultos
 
-        Z = np.r_[ Y, -1 ]          # Prepara as entradas para os neurônios de saída
+        z = np.r_[ y, -1 ]          # Prepara as entradas para os neurônios de saída
 
-        A = self.M @ Z              # Ativação dos neurônio de saída
-        O = self.activation ( A )   # Saída da camada de saída
+        a = self.M @ z              # Ativação dos neurônio de saída
+        o = self.phi ( a )          # Saída da camada de saída
 
         # Monta um vetor de predição baseado no argmax da saída da rede
-        predicted_output = -np.ones_like(O)
-        predicted_output[ np.argmax(O) ] = +1
+        predicted_output = -np.ones_like(o)
+        predicted_output[ np.argmax(o) ] = +1
 
         # Retorna a classe correspondente ao vetor predito pela rede
         return self.train_dataset.decode_vector( predicted_output ) 
