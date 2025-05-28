@@ -97,14 +97,11 @@ class PerceptronSimples:
 
         self.train_dataset = train_dataset
 
-        # Dimensões do dataset
-        self.m, self.n, self.k = self.train_dataset.shape
-
         # Qual o número de neurônios? É o mesmo que o número de classes
-        self.q = self.k
+        self.q = self.train_dataset.class_count
 
         # Qual o número de entradas? É o número de atributos + 1
-        self.p = self.n + 1
+        self.p = self.train_dataset.features_count + 1
 
         # Inicializa os pesos
         self.W = np.random.normal( size = (self.q, self.p) )
