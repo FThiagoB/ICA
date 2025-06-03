@@ -106,8 +106,8 @@ class PerceptronSimples:
         # Número de instâncias do conjunto de treinamento
         self.n = len( self.train_dataset )
 
-        # Inicializa os pesos
-        self.W = np.random.normal( size = (self.q, self.p) )
+        # Inicializa os pesos usando uma distribuição normal
+        self.W = np.random.randn(self.q, self.p) * np.sqrt(1 / self.p)  # (q, p)
     
     def train( self, max_epocas : int = 1000, *, eta : float = 0.1, reset_weights = False, verbose = True ) -> None:
         """
@@ -123,6 +123,9 @@ class PerceptronSimples:
         # Reseta os pesos
         if reset_weights:
             self.W = np.random.normal( size = (self.q, self.p) )
+
+        # Armazenará o custo J e a época
+        Js = []
 
         # Percorre o total de épocas
         for epoca in range( max_epocas ):
@@ -155,6 +158,10 @@ class PerceptronSimples:
                     # Atualiza os pesos usando o produto externo
                     self.W += eta * np.outer(err, x_bias)
 
+            # Armazena o custo e a época
+            custo = self.compute_cost()
+            Js.append( (epoca, custo) )
+
             # Se acertou todo o conjunto de treinamento, para o treinamento
             if total_erros == 0:
                 print(f"A rede acertou todo o conjunto treinamento em {epoca} épocas")
@@ -162,11 +169,13 @@ class PerceptronSimples:
 
             # Exibe uma mensagem de log a cada 5% do número de épocas totais
             elif ( epoca % (max_epocas * 0.05) == 0 ) and verbose:
-                print(f"Época {epoca}: erros: {total_erros} \t\t\t\t\t\t\r", end="")
+                print(f"Época {epoca}: erros: {total_erros} - custo: {self.compute_cost()}\t\t\t\t\t\t\r", end="")
         
         # Entra quando não houve break, ou seja, ainda houve erros até na última época
         else:
             print(f"Treinamento encerrado com {total_erros} erros após {max_epocas} épocas.")
+    
+        return Js
     
     def predict( self, features : np.ndarray ) -> Union[float, int]:
         """
@@ -197,8 +206,41 @@ class PerceptronSimples:
         # Retorna a classe correspondente ao vetor predito pela rede
         return self.train_dataset.decode_vector( predicted_output ) 
 
+    def compute_cost( self ) -> float:
+        """
+            Computa o custo baseado no erro quadrático médio.
+
+            Returns:
+                Valor do custo atual da rede, baseado no conjunto treinamento.
+        """
+
+        # Matriz de features de cada instância do conjunto de treinamento
+        X = np.zeros( shape = (self.p, self.n) )    # (p, n)
+
+        # Matriz de saídas desejadas de cada instância do conjunto
+        D = np.zeros( shape = (self.q, self.n) )    # (q, n)
+
+        # Percorre as instâncias de treinamento e preenche X e D
+        for index, *features, classe in self.train_dataset:
+            # Vetor saída desejada (m, 1)
+            d = self.train_dataset.encode_label( classe )
+
+            # Preenche as colunas de acordo com a instância atual
+            D[:, index] = d
+            X[:, index] = np.r_[ features, -1 ] # Adiciona o -1 do viés
+        
+        # Saída da rede
+        O = self.W @ X                          # (q, p)x(p, n) = (q, n)
+
+        # Computa o erro
+        err = D - O                             # (q, n) - (q, n)
+
+        # Computa o custo baseado no erro quadrático médio
+        cost = np.sum( err ** 2 ) / (2 * self.n)
+        return cost
+    
 class MultiLayerPerceptron:
-    """ Classe que implementa uma MLP(p, q1, m) para problemas de classificação. """
+    """ Classe que implementa uma MLP de uma camada oculta para problemas de classificação. """
 
     def __init__( self, train_dataset : Dataset, q : int = 3):
         """
@@ -220,45 +262,12 @@ class MultiLayerPerceptron:
         self.phi = lambda x: np.tanh( 0.5 * x )
         self.ddx_phi = lambda x: 0.5 * ( 1 - self.phi(x) ** 2 )
 
-        # Inicializa o vetor de pesos dos neurônios ocultos
+        # Inicializa o vetor de pesos dos neurônios ocultos com uma distribuição normal
         self.W = np.random.randn(self.q, self.p) * np.sqrt(1 / self.p)              # (q, p)
 
-        # Inicializa o vetor de pesos dos neurônios de saída
+        # Inicializa o vetor de pesos dos neurônios de saída com uma distribuição normal
         self.M = np.random.randn(self.m, self.q + 1) * np.sqrt(1 / (self.q + 1))    # (m, q+1)
     
-    def compute_cost( self ) -> float:
-
-        # Matriz de features de cada instância do conjunto de treinamento
-        X = np.zeros( shape = (self.p, self.n) )    # (p, n)
-
-        # Matriz de saídas desejadas de cada instância do conjunto
-        D = np.zeros( shape = (self.m, self.n) )    # (m, n)
-
-        # Percorre as instâncias de treinamento e preenche X e D
-        for index, *features, classe in self.train_dataset:
-            # Vetor saída desejada (m, 1)
-            d = self.train_dataset.encode_label( classe )
-
-            # Preenche as colunas de acordo com a instância atual
-            D[:, index] = d
-            X[:, index] = np.r_[ features, -1 ] # Adiciona o -1 do viés
-        
-        # Saída da camada oculta
-        U = self.phi( self.W @ X )              # (q, p)x(p, n) = (q, n)
-
-        # Entrada da camada de saída: Adiciona o -1 do viés
-        Z = np.r_[U, -np.ones( (1, self.n) )]   # (q+1, n)
-
-        # Saída da camada de saída      
-        O = self.phi( self.M @ Z )              # (m, q+1) x (q+1, n) = (m, n)
-
-        # Computa o erro
-        err = D - O                             # (m, n) - (m, n)
-
-        # Computa o custo baseado no erro quadrático médio
-        cost = np.sum( err ** 2 ) / (2 * self.n)
-        return cost
-
     def train( self, max_epocas : int = 1000, *, eta : float = 0.1, reset_weights = False, verbose = True ):
         """
             Função para o treinamento da rede de neurônios. Usa como base o gradiente descendente.
@@ -323,7 +332,7 @@ class MultiLayerPerceptron:
                 if np.argmax(o) != np.argmax(real_output):
                     total_erros += 1
 
-            # Armazena o custo e a época
+            # Armazena o custo e a época - usado para plotar o gráfico de aprendizado.
             custo = self.compute_cost()
             Js.append( (epoca, custo) )
 
@@ -372,6 +381,45 @@ class MultiLayerPerceptron:
         # Retorna a classe correspondente ao vetor predito pela rede
         return self.train_dataset.decode_vector( predicted_output ) 
 
+    def compute_cost( self ) -> float:
+        """
+            Computa o custo baseado no erro quadrático médio.
+
+            Returns:
+                Valor do custo atual da rede, baseado no conjunto treinamento.
+        """
+
+        # Matriz de features de cada instância do conjunto de treinamento
+        X = np.zeros( shape = (self.p, self.n) )    # (p, n)
+
+        # Matriz de saídas desejadas de cada instância do conjunto
+        D = np.zeros( shape = (self.m, self.n) )    # (m, n)
+
+        # Percorre as instâncias de treinamento e preenche X e D
+        for index, *features, classe in self.train_dataset:
+            # Vetor saída desejada (m, 1)
+            d = self.train_dataset.encode_label( classe )
+
+            # Preenche as colunas de acordo com a instância atual
+            D[:, index] = d
+            X[:, index] = np.r_[ features, -1 ] # Adiciona o -1 do viés
+        
+        # Saída da camada oculta
+        U = self.phi( self.W @ X )              # (q, p)x(p, n) = (q, n)
+
+        # Entrada da camada de saída: Adiciona o -1 do viés
+        Z = np.r_[U, -np.ones( (1, self.n) )]   # (q+1, n)
+
+        # Saída da camada de saída      
+        O = self.phi( self.M @ Z )              # (m, q+1) x (q+1, n) = (m, n)
+
+        # Computa o erro
+        err = D - O                             # (m, n) - (m, n)
+
+        # Computa o custo baseado no erro quadrático médio
+        cost = np.sum( err ** 2 ) / (2 * self.n)
+        return cost
+    
 class ExtremeLearningMachine:
     """ Classe que implementa a ELM para problemas de classificação. """
 
