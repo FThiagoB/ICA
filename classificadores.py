@@ -159,11 +159,11 @@ class PerceptronSimples:
 
             # Exibe uma mensagem de log a cada 5% do número de épocas totais
             elif ( epoca % (max_epocas * 0.05) == 0 ) and verbose:
-                print(f"Época {epoca}: erros: {total_erros}")
+                print(f"Época {epoca}: erros: {total_erros}\t\t\t\t\t\t\r", end="")
         
         # Entra quando não houve break, ou seja, ainda houve erros até na última época
         else:
-            print(f"Treinamento encerrado com {total_erros} erros após {epoca} épocas.")
+            print(f"Treinamento encerrado com {total_erros} erros após {max_epocas} épocas.")
     
     def predict( self, features : np.ndarray ) -> Union[float, int]:
         """
@@ -290,11 +290,11 @@ class MultiLayerPerceptron:
 
             # Exibe uma mensagem de log a cada 5% do número máximo de épocas
             elif verbose and not (epoca% round(max_epocas*0.05)):
-                print(f"Época {epoca}: {total_erros} erros.")
+                print(f"Época {epoca}: {total_erros} erros.\t\t\t\t\t\t\r", end="")
 
         # Entra quando não houve break, ou seja, ainda houve erros até na última época
         else:
-            print(f"Treinamento encerrado com {total_erros} erros após {epoca} épocas.")
+            print(f"Treinamento encerrado com {total_erros} erros após {max_epocas} épocas.")
 
     def predict( self, features : np.ndarray ) -> Union[float, int]:
         """
@@ -370,15 +370,25 @@ class ExtremeLearningMachine:
             y = self.phi(u)             # Saída da camada oculta (1xq)
 
             Z[:, index] = np.r_[y, -1]  # Adiciona a saída da camada oculta na coluna adequada da amostra atual
-            D[:, index] = real_output   # Adiciona o vetor de saída desejada na coluna adequada da amostra atual
+            D[:, index] = real_output   # Adiciona o vetor de saída desejada nSa coluna adequada da amostra atual
         
         # Atualiza a matriz de pesos de saída 
-        inversa = np.linalg.inv( Z @ Z.T ) # (q+1, q+1)
+        inversa = np.linalg.pinv( Z @ Z.T ) # (q+1, q+1)
 
         self.M = (
             D @ Z.T     # (m, N) x (N, q+1) = (m, q+1)
             @ inversa   # (m, q+1) x (q+1, q+1) = (m, q+1)
         )
+
+        # Verifica se há erros ao prever as instâncias do conjunto de treinamento
+        total_erros = 0
+        
+        for index, *features, classe in self.train_dataset:
+
+            if self.predict( features ) != classe:
+                total_erros += 1
+        
+        print(f"Treinamento encerrado com {total_erros}.")
     
     def predict( self, features : np.ndarray ) -> Union[float, int]:
         """
