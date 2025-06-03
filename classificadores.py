@@ -1,4 +1,4 @@
-from dataset import Dataset
+from dataset import Dataset, iris_dataset
 
 import pandas as pd
 import numpy as np
@@ -103,6 +103,9 @@ class PerceptronSimples:
         # Qual o número de entradas? É o número de atributos + 1
         self.p = self.train_dataset.features_count + 1
 
+        # Número de instâncias do conjunto de treinamento
+        self.n = len( self.train_dataset )
+
         # Inicializa os pesos
         self.W = np.random.normal( size = (self.q, self.p) )
     
@@ -159,7 +162,7 @@ class PerceptronSimples:
 
             # Exibe uma mensagem de log a cada 5% do número de épocas totais
             elif ( epoca % (max_epocas * 0.05) == 0 ) and verbose:
-                print(f"Época {epoca}: erros: {total_erros}\t\t\t\t\t\t\r", end="")
+                print(f"Época {epoca}: erros: {total_erros} \t\t\t\t\t\t\r", end="")
         
         # Entra quando não houve break, ou seja, ainda houve erros até na última época
         else:
@@ -211,9 +214,10 @@ class MultiLayerPerceptron:
         self.q = q                                          # Número de neurônios ocultos
         self.m = self.train_dataset.class_count             # Número de neurônios de saída
         self.p = self.train_dataset.features_count + 1      # Número de entradas da rede
+        self.n = len( self.train_dataset )                  # Número de instâncias de treinamento
 
         # Função de ativação usada
-        self.phi = lambda x: np.tanh(x)
+        self.phi = lambda x: np.tanh( 0.5 * x )
         self.ddx_phi = lambda x: 1 - self.phi(x) ** 2
 
         # Inicializa o vetor de pesos dos neurônios ocultos
@@ -222,6 +226,26 @@ class MultiLayerPerceptron:
         # Inicializa o vetor de pesos dos neurônios de saída
         self.M = np.random.normal( size = (self.m, self.q+1) )   # (m, q+1)
     
+    def compute_cost( self ):
+        X = np.zeros( shape = (self.p, self.n) )
+        D = np.zeros( shape = (self.q, self.n) )
+
+        # Monta a matriz X para cada instância do conjunto
+        for index, *features, classe in self.train_dataset:
+            d = self.train_dataset.encode_label( classe )
+
+            D[:, index] = d
+            X[:, index] = np.r_[ features, -1 ]
+        
+        U = self.phi( self.W @ X )
+        Z = np.r_[U, -np.ones( (1, self.n) )]
+        A = self.M @ Z
+        O = self.phi( A )
+
+        err = D - O
+        cost = np.sum( err ** 2 ) / (2 * self.n)
+        return cost
+
     def train( self, max_epocas : int = 1000, *, eta : float = 0.1, reset_weights = False, verbose = True ):
         """
             Função para o treinamento da rede de neurônios. Usa como base o gradiente descendente.
@@ -290,7 +314,7 @@ class MultiLayerPerceptron:
 
             # Exibe uma mensagem de log a cada 5% do número máximo de épocas
             elif verbose and not (epoca% round(max_epocas*0.05)):
-                print(f"Época {epoca}: {total_erros} erros.\t\t\t\t\t\t\r", end="")
+                print(f"Época {epoca}: {total_erros} erros. Custo: {self.compute_cost()}\t\t\t\t\t\t\r", end="")
 
         # Entra quando não houve break, ou seja, ainda houve erros até na última época
         else:
