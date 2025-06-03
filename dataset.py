@@ -96,7 +96,7 @@ class Dataset:
         data = self.data.sample(frac=1, random_state=random_state).reset_index( drop=True )
 
         # Retorna uma nova instância da classe
-        return self.__class__( data, label_column = self.label_column, column_names = self.column_names, _label_index_to_name = self._label_index_to_name )
+        return self.__class__( data, label_column = self.label_column, column_names = self.column_names, _label_index_to_name = self._label_index_to_name, _label_encodings = self._label_encodings, _label_decodings = self._label_decodings )
     
     def split( self, train_size: int = 0.8, *, random_state: Optional[int] = None, stratify: bool = False ) -> tuple[Self, Self]:
         """
