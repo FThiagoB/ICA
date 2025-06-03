@@ -218,31 +218,44 @@ class MultiLayerPerceptron:
 
         # Função de ativação usada
         self.phi = lambda x: np.tanh( 0.5 * x )
-        self.ddx_phi = lambda x: 1 - self.phi(x) ** 2
+        self.ddx_phi = lambda x: 0.5 * ( 1 - self.phi(x) ** 2 )
 
         # Inicializa o vetor de pesos dos neurônios ocultos
-        self.W = np.random.normal( size = (self.q, self.p) )     # (q, p)
+        self.W = np.random.randn(self.q, self.p) * np.sqrt(1 / self.p)              # (q, p)
 
         # Inicializa o vetor de pesos dos neurônios de saída
-        self.M = np.random.normal( size = (self.m, self.q+1) )   # (m, q+1)
+        self.M = np.random.randn(self.m, self.q + 1) * np.sqrt(1 / (self.q + 1))    # (m, q+1)
     
-    def compute_cost( self ):
-        X = np.zeros( shape = (self.p, self.n) )
-        D = np.zeros( shape = (self.q, self.n) )
+    def compute_cost( self ) -> float:
 
-        # Monta a matriz X para cada instância do conjunto
+        # Matriz de features de cada instância do conjunto de treinamento
+        X = np.zeros( shape = (self.p, self.n) )    # (p, n)
+
+        # Matriz de saídas desejadas de cada instância do conjunto
+        D = np.zeros( shape = (self.m, self.n) )    # (m, n)
+
+        # Percorre as instâncias de treinamento e preenche X e D
         for index, *features, classe in self.train_dataset:
+            # Vetor saída desejada (m, 1)
             d = self.train_dataset.encode_label( classe )
 
+            # Preenche as colunas de acordo com a instância atual
             D[:, index] = d
-            X[:, index] = np.r_[ features, -1 ]
+            X[:, index] = np.r_[ features, -1 ] # Adiciona o -1 do viés
         
-        U = self.phi( self.W @ X )
-        Z = np.r_[U, -np.ones( (1, self.n) )]
-        A = self.M @ Z
-        O = self.phi( A )
+        # Saída da camada oculta
+        U = self.phi( self.W @ X )              # (q, p)x(p, n) = (q, n)
 
-        err = D - O
+        # Entrada da camada de saída: Adiciona o -1 do viés
+        Z = np.r_[U, -np.ones( (1, self.n) )]   # (q+1, n)
+
+        # Saída da camada de saída      
+        O = self.phi( self.M @ Z )              # (m, q+1) x (q+1, n) = (m, n)
+
+        # Computa o erro
+        err = D - O                             # (m, n) - (m, n)
+
+        # Computa o custo baseado no erro quadrático médio
         cost = np.sum( err ** 2 ) / (2 * self.n)
         return cost
 
@@ -259,9 +272,12 @@ class MultiLayerPerceptron:
 
         # Reseta os pesos
         if reset_weights:
-            self.W = np.random.normal( size = (self.q, self.p) )
-            self.M = np.random.normal( size = (self.m, self.q+1) )
+            self.W = np.random.randn(self.q, self.p) * np.sqrt(1 / self.p)
+            self.M = np.random.randn(self.m, self.q + 1) * np.sqrt(1 / (self.q + 1))
         
+        # Armazenará o custo J e a época
+        Js = []
+
         # Percorre um número qualquer de épocas
         for epoca in range( max_epocas ):
             total_erros = 0
@@ -279,18 +295,18 @@ class MultiLayerPerceptron:
 
                 # Sentido direto - cálculo da ativação e a saída de cada camada
                 u = self.W @ x_bias         # Ativação de cada neurônio oculto
-                y = self.phi( u )    # Saída dos neurônios ocultos
+                y = self.phi( u )           # Saída dos neurônios ocultos
 
                 z = np.r_[ y, -1 ]          # Prepara as entradas para os neurônios de saída
 
                 a = self.M @ z              # Ativação dos neurônio de saída
-                o = self.phi ( a )   # Saída da camada de saída
+                o = self.phi ( a )          # Saída da camada de saída
 
                 # Sentido inverso - atualização dos pesos das camadas
                 err = real_output - o 
 
                 # atualiza os pesos da camada de saída
-                delta_output = err * self.ddx_phi( a )                  # (m x 1)
+                delta_output = err * (self.ddx_phi( a ) + 0.05)         # (m x 1)
                 delta_weights_out = eta * np.outer( delta_output, z )   # (m x (q+1))
                 self.M = self.M + delta_weights_out
 
@@ -299,13 +315,17 @@ class MultiLayerPerceptron:
                 backpropagated_error = output_weights_no_bias_T @ delta_output  # (q x 1)
 
                 # atualiza os pesos da camada oculta
-                delta_hidden = backpropagated_error * self.ddx_phi(u)           # (q x 1)
+                delta_hidden = backpropagated_error * (self.ddx_phi(u) + 0.05)  # (q x 1)
                 delta_weights_hidden = eta * np.outer( delta_hidden, x_bias )   # (q x p)
                 self.W = self.W + delta_weights_hidden
 
                 # Verifica se a previsão seria acertada ou não
                 if np.argmax(o) != np.argmax(real_output):
                     total_erros += 1
+
+            # Armazena o custo e a época
+            custo = self.compute_cost()
+            Js.append( (epoca, custo) )
 
             # Se acertou todo o conjunto de treinamento, para o treinamento
             if total_erros == 0:
@@ -314,12 +334,14 @@ class MultiLayerPerceptron:
 
             # Exibe uma mensagem de log a cada 5% do número máximo de épocas
             elif verbose and not (epoca% round(max_epocas*0.05)):
-                print(f"Época {epoca}: {total_erros} erros. Custo: {self.compute_cost()}\t\t\t\t\t\t\r", end="")
+                print(f"Época {epoca}: {total_erros} erros. Custo: {custo}\t\t\t\t\t\t\r", end="")
 
         # Entra quando não houve break, ou seja, ainda houve erros até na última época
         else:
             print(f"Treinamento encerrado com {total_erros} erros após {max_epocas} épocas.")
 
+        return Js
+    
     def predict( self, features : np.ndarray ) -> Union[float, int]:
         """
             Função usada para prever a classe, dada as features do ponto.
