@@ -169,11 +169,11 @@ class PerceptronSimples:
 
             # Exibe uma mensagem de log a cada 5% do número de épocas totais
             elif ( epoca % (max_epocas * 0.05) == 0 ) and verbose:
-                print(f"Época {epoca}: erros: {total_erros} - custo: {self.compute_cost()}\t\t\t\t\t\t\r", end="")
+                print(f"Época {epoca} > Custo: {self.compute_cost()}\t\t\t\t\t\t\r", end="")
         
         # Entra quando não houve break, ou seja, ainda houve erros até na última época
         else:
-            print(f"Treinamento encerrado com {total_erros} erros após {max_epocas} épocas.")
+            print(f"Treinamento encerrado após {max_epocas} épocas. Custo = {custo}.")
     
         return Js
     
@@ -343,11 +343,11 @@ class MultiLayerPerceptron:
 
             # Exibe uma mensagem de log a cada 5% do número máximo de épocas
             elif verbose and not (epoca% round(max_epocas*0.05)):
-                print(f"Época {epoca}: {total_erros} erros. Custo: {custo}\t\t\t\t\t\t\r", end="")
+                print(f"Época {epoca} > Custo: {custo}\t\t\t\t\t\t\r", end="")
 
         # Entra quando não houve break, ou seja, ainda houve erros até na última época
         else:
-            print(f"Treinamento encerrado com {total_erros} erros após {max_epocas} épocas.")
+            print(f"Treinamento encerrado após {max_epocas} épocas. Custo = {custo}.")
 
         return Js
     
@@ -440,11 +440,13 @@ class ExtremeLearningMachine:
         self.N = len(train_dataset)                 # Número de instâncias do conjunto de treino
 
         # Função de ativação
-        self.phi = lambda u: (1 - np.exp(-u)) / (1 + np.exp(-u))
+        self.phi = lambda u: np.tanh(u) #(1 - np.exp(-u)) / (1 + np.exp(-u))
 
-        # Incializa as matrizes de pesos
-        self.W = np.random.normal( size=(self.q, self.p) )     # Pesos da camada oculta (q x p)
-        self.M = np.random.normal( size=(self.m, self.q+1) )   # Pesos da camada de saída (m, q+1)
+        # Inicializa os pesos da camada oculta (q x p)
+        self.W = np.random.randn(self.q, self.p) * np.sqrt(1 / self.p)
+
+        # Inicializa os pesos da camada de saída (m, q+1)
+        self.M = np.random.randn(self.m, self.q + 1) * np.sqrt(1 / (self.q + 1))
 
     def train( self ):
         """
@@ -482,7 +484,7 @@ class ExtremeLearningMachine:
             if self.predict( features ) != classe:
                 total_erros += 1
         
-        print(f"Treinamento encerrado com {total_erros}.")
+        print(f"Treinamento encerrado. Custo = {self.compute_cost()}")
     
     def predict( self, features : np.ndarray ) -> Union[float, int]:
         """
@@ -510,3 +512,42 @@ class ExtremeLearningMachine:
 
         # Retorna a classe correspondente ao vetor predito pela rede
         return self.train_dataset.decode_vector( predicted_output ) 
+
+    def compute_cost( self ) -> float:
+        """
+            Computa o custo baseado no erro quadrático médio.
+
+            Returns:
+                Valor do custo atual da rede, baseado no conjunto treinamento.
+        """
+
+        # Matriz de features de cada instância do conjunto de treinamento
+        X = np.zeros( shape = (self.p, self.N) )    # (p, n)
+
+        # Matriz de saídas desejadas de cada instância do conjunto
+        D = np.zeros( shape = (self.m, self.N) )    # (m, n)
+
+        # Percorre as instâncias de treinamento e preenche X e D
+        for index, *features, classe in self.train_dataset:
+            # Vetor saída desejada (m, 1)
+            d = self.train_dataset.encode_label( classe )
+
+            # Preenche as colunas de acordo com a instância atual
+            D[:, index] = d
+            X[:, index] = np.r_[ features, -1 ] # Adiciona o -1 do viés
+        
+        # Saída da camada oculta
+        U = self.phi( self.W @ X )              # (q, p)x(p, n) = (q, n)
+
+        # Entrada da camada de saída: Adiciona o -1 do viés
+        Z = np.r_[U, -np.ones( (1, self.N) )]   # (q+1, n)
+
+        # Saída da camada de saída      
+        O = self.M @ Z                          # (m, q+1) x (q+1, n) = (m, n)
+
+        # Computa o erro
+        err = D - O                             # (m, n) - (m, n)
+
+        # Computa o custo baseado no erro quadrático médio
+        cost = np.sum( err ** 2 ) / (2 * self.N)
+        return cost
